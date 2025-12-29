@@ -6,24 +6,12 @@ export const dynamic = "force-dynamic";
 
 function moneyBRL(cents: number | null | undefined) {
   const v = (cents ?? 0) / 100;
-  return v.toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  });
+  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-/**
- * Tipo correto do Prisma para a listagem
- */
-type InvoiceRow = Prisma.InvoiceGetPayload<{
-  include: {
-    customer: { select: { name: true } };
-    serviceOrder: { select: { number: true } };
-  };
-}>;
-
-export default async function NotasPage() {
-  const invoices: InvoiceRow[] = await prisma.invoice.findMany({
+// ✅ Inferência de tipo via PromiseReturnType (não depende de InvoiceGetPayload)
+async function getInvoices() {
+  return prisma.invoice.findMany({
     orderBy: { createdAt: "desc" },
     take: 200,
     include: {
@@ -31,6 +19,12 @@ export default async function NotasPage() {
       serviceOrder: { select: { number: true } },
     },
   });
+}
+
+type InvoiceRow = Prisma.PromiseReturnType<typeof getInvoices>[number];
+
+export default async function NotasPage() {
+  const invoices: InvoiceRow[] = await getInvoices();
 
   return (
     <div className="space-y-6">
