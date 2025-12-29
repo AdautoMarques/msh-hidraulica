@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  TECH
+  CUSTOMER
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  DONE
+  NO_SHOW
+}
+
+enum ServiceOrderStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_PARTS
+  DONE
+  CANCELED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  CANCELED
+  PAID
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(CUSTOMER)
+  customer  Customer?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  phone     String?  @unique   // ✅ AQUI
+  document  String?
+  address   String?
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id])
+
+  appointments Appointment[]
+  serviceOrders ServiceOrder[]
+  invoices      Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model Service {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  durationMin Int      @default(60)
+  basePrice   Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  appointments Appointment[]
+}
+
+model BusinessHours {
+  id        String   @id @default(cuid())
+  weekday   Int      // 0=dom ... 6=sab
+  startMin  Int      // minutos do dia (ex: 8*60)
+  endMin    Int      // (ex: 18*60)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([weekday])
+}
+
+model TimeOff {
+  id        String   @id @default(cuid())
+  startAt   DateTime
+  endAt     DateTime
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  customerId  String
+  customer    Customer          @relation(fields: [customerId], references: [id])
+
+  serviceId   String
+  service     Service           @relation(fields: [serviceId], references: [id])
+
+  startAt     DateTime
+  endAt       DateTime
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+
+  serviceOrder ServiceOrder?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([startAt])
+  @@index([status])
+}
+
+model ServiceOrder {
+  id            String             @id @default(cuid())
+  number        Int                @unique
+  status        ServiceOrderStatus @default(OPEN)
+
+  customerId    String
+  customer      Customer           @relation(fields: [customerId], references: [id])
+
+  appointmentId String?            @unique
+  appointment   Appointment?       @relation(fields: [appointmentId], references: [id])
+
+  title         String
+  description   String?
+  technician    String?
+  materials     String?
+  laborCents    Int                @default(0)
+  totalCents    Int                @default(0)
+
+  invoice       Invoice?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  number        Int           @unique
+  status        InvoiceStatus @default(DRAFT)
+
+  customerId    String
+  customer      Customer      @relation(fields: [customerId], references: [id])
+
+  serviceOrderId String?      @unique
+  serviceOrder   ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+
+  issuedAt      DateTime?
+  dueAt         DateTime?
+  paidAt        DateTime?
+
+  subtotalCents Int           @default(0)
+  discountCents Int           @default(0)
+  totalCents    Int           @default(0)
+
+  items         InvoiceItem[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  description String
+  qty         Int     @default(1)
+  unitCents   Int     @default(0)
+  totalCents  Int     @default(0)
+}
