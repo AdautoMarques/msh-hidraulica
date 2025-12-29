@@ -12,6 +12,18 @@ type PageProps = {
   searchParams?: Promise<{ q?: string; status?: string }>;
 };
 
+type InvoiceRow = {
+  id: string;
+  number: number;
+  status: "DRAFT" | "ISSUED" | "CANCELED" | "PAID";
+  totalCents: number;
+
+  customer: { name: string | null } | null;
+  serviceOrder: { number: number } | null;
+
+  createdAt: Date;
+};
+
 export default async function Page({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const q = (sp.q ?? "").trim();
@@ -21,24 +33,28 @@ export default async function Page({ searchParams }: PageProps) {
   if (status) where.status = status;
 
   if (q) {
+    const qAsNumber = Number(q);
     const or: any[] = [
       { customer: { name: { contains: q, mode: "insensitive" } } },
     ];
 
-    const asNumber = Number(q);
-    if (!Number.isNaN(asNumber)) {
-      or.push({ number: asNumber });
+    if (!Number.isNaN(qAsNumber)) {
+      or.push({ number: qAsNumber });
     }
 
     where.OR = or;
   }
 
-  const invoices = await prisma.invoice.findMany({
+  const invoices = (await prisma.invoice.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { customer: true, serviceOrder: true },
-  });
+    include: {
+      customer: { select: { name: true } },
+      serviceOrder: { select: { number: true } },
+    },
+    select: undefined, // (só para deixar claro que estamos usando include)
+  })) as unknown as InvoiceRow[];
 
   return (
     <div className="space-y-6">
@@ -101,7 +117,7 @@ export default async function Page({ searchParams }: PageProps) {
           {invoices.length === 0 ? (
             <div className="p-5 text-sm text-white/60">Nenhuma nota.</div>
           ) : (
-            invoices.map((inv) => (
+            invoices.map((inv: InvoiceRow) => (
               <Link
                 key={inv.id}
                 href={`/admin/notas/${inv.id}`}
@@ -112,6 +128,7 @@ export default async function Page({ searchParams }: PageProps) {
                     <div className="text-sm font-medium">
                       Nota #{inv.number} • {inv.customer?.name ?? "Sem cliente"}
                     </div>
+
                     <div className="mt-1 text-xs text-white/60">
                       Status: {inv.status}
                       {inv.serviceOrder
