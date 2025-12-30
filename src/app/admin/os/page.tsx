@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -39,13 +40,23 @@ function statusPill(status: string) {
   }
 }
 
+// ✅ Tipo correto do retorno (com includes)
+type ServiceOrderListItem = Prisma.ServiceOrderGetPayload<{
+  include: {
+    customer: true;
+    invoice: true;
+    appointment: { include: { service: true } };
+  };
+}>;
+
 export default async function Page({ searchParams }: PageProps) {
   const sp = (await searchParams) ?? {};
   const q = (sp.q ?? "").trim();
   const status = (sp.status ?? "").trim();
 
-  const where: any = {};
-  if (status) where.status = status;
+  // ✅ sem any: tipa o where corretamente
+  const where: Prisma.ServiceOrderWhereInput = {};
+  if (status) where.status = status as any; // (se status for enum no Prisma, podemos ajustar; assim não quebra build)
 
   if (q) {
     const n = Number(q);
@@ -53,10 +64,10 @@ export default async function Page({ searchParams }: PageProps) {
       { title: { contains: q, mode: "insensitive" } },
       { customer: { name: { contains: q, mode: "insensitive" } } },
       ...(Number.isFinite(n) ? [{ number: n }] : []),
-    ];
+    ] as Prisma.ServiceOrderWhereInput["OR"];
   }
 
-  const orders = await prisma.serviceOrder.findMany({
+  const orders: ServiceOrderListItem[] = await prisma.serviceOrder.findMany({
     where,
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -134,15 +145,15 @@ export default async function Page({ searchParams }: PageProps) {
             </div>
           ) : (
             orders.map((so) => (
-              <div key={so.id} className="p-5 hover:bg-white/5 transition">
+              <div key={so.id} className="p-5 transition hover:bg-white/5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <Link href={`/admin/os/${so.id}`} className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <div className="text-sm font-medium">
                         OS #{so.number} • {so.customer?.name ?? "Sem cliente"}
                       </div>
-                      <span className={statusPill(so.status)}>
-                        {STATUS_LABEL[so.status] ?? so.status}
+                      <span className={statusPill(String(so.status))}>
+                        {STATUS_LABEL[String(so.status)] ?? String(so.status)}
                       </span>
                     </div>
 
