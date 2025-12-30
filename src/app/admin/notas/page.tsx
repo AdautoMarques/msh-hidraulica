@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +8,6 @@ function moneyBRL(cents: number | null | undefined) {
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-// ✅ Inferência de tipo via PromiseReturnType (não depende de InvoiceGetPayload)
 async function getInvoices() {
   return prisma.invoice.findMany({
     orderBy: { createdAt: "desc" },
@@ -21,14 +19,15 @@ async function getInvoices() {
   });
 }
 
-type InvoiceRow = Prisma.PromiseReturnType<typeof getInvoices>[number];
+// ✅ Inferência TypeScript (não depende do Prisma)
+type InvoicesResult = Awaited<ReturnType<typeof getInvoices>>;
+type InvoiceRow = InvoicesResult[number];
 
 export default async function NotasPage() {
   const invoices: InvoiceRow[] = await getInvoices();
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-end justify-between gap-3">
         <div>
           <div className="text-xs text-white/60">Admin</div>
@@ -48,7 +47,6 @@ export default async function NotasPage() {
         </Link>
       </div>
 
-      {/* Lista */}
       <div className="rounded-2xl border border-white/10 bg-black/30 shadow-2xl backdrop-blur">
         <div className="border-b border-white/10 px-5 py-4">
           <div className="text-sm font-medium">{invoices.length} nota(s)</div>
